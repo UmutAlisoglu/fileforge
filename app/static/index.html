@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#192323">
+  <title>FileForge — Your file workshop</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="FileForge home"><span class="brand-mark">f<span>↗</span></span>FileForge<span class="version">01</span></a>
+    <div class="sidebar-caption">WORKSPACE</div>
+    <nav aria-label="Conversion tools" id="navigation"></nav>
+    <div class="sidebar-bottom">
+      <div class="local-indicator"><span></span> Runs on your computer</div>
+      <p>Your files stay here.<br>No accounts. No cloud uploads.</p>
+      <span class="build-label">FILEFORGE / FIRST EDITION</span>
+    </div>
+  </aside>
+  <main>
+    <header class="topbar"><span>Workspace <span class="breadcrumb">/</span> <strong id="breadcrumb-tool">Video compression</strong></span><span class="local-pill"><span></span> Local workspace</span></header>
+    <div class="content">
+      <div class="intro">
+        <div><p class="eyebrow">THE EVERYDAY FILE WORKSHOP</p><h1>File tools, in one place<span>.</span></h1><p class="subtitle">Make it smaller. Change its format. Keep things moving.</p></div>
+        <div class="intro-note"><span class="note-symbol">↙</span><span>Pick a tool.<br>Bring your file.</span></div>
+      </div>
+      <div class="tool-grid" id="tool-grid" aria-label="Choose a tool"></div>
+      <section class="converter" aria-labelledby="converter-title">
+        <div class="converter-heading"><div><p class="eyebrow" id="tool-category">VIDEO / MP4</p><h2 id="converter-title">Compress video</h2><p id="converter-description">A smaller MP4, ready for sharing.</p></div><span class="tool-number" id="tool-number">01</span></div>
+        <div id="error-banner" class="error-banner" role="alert" hidden></div>
+        <div class="converter-body">
+          <div class="source-panel">
+            <div class="section-label"><span>01</span> Source file</div>
+            <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Choose or drop a source file">
+              <div class="upload-icon" aria-hidden="true">↑</div>
+              <h3 id="drop-title">Drop your video here</h3>
+              <p>or <span class="browse-text">browse files</span> on your computer</p>
+              <span class="formats" id="formats">MP4, MOV, MKV, WEBM, AVI · up to 2 GB</span>
+            </div>
+            <input type="file" id="file-input" hidden>
+            <div class="selected-files" id="selected-files" aria-live="polite"></div>
+            <p class="source-note" id="source-note">The original file stays unchanged.</p>
+          </div>
+          <div class="settings-panel">
+            <div class="section-label"><span>02</span> Output settings</div>
+            <form id="settings-form"></form>
+          </div>
+        </div>
+        <div class="converter-footer"><div class="privacy-note"><span aria-hidden="true">◈</span><span>Processed locally on your computer</span></div><button class="primary-button" id="convert-button" disabled>Compress video <span aria-hidden="true">↗</span></button></div>
+      </section>
+      <section class="activity" aria-labelledby="activity-title">
+        <div class="activity-heading"><div><h2 id="activity-title">Your conversions <span id="job-count">0</span></h2><p>Download your results here.</p></div><button class="text-button" id="clear-history" disabled>Clear completed</button></div>
+        <div id="jobs" aria-live="polite"><div class="empty-state"><span class="empty-icon" aria-hidden="true">↳</span><div><strong>A fresh workspace</strong><p>Your conversions will appear here when you start.</p></div></div></div>
+      </section>
+      <footer class="page-footer"><span>Built for files. Designed for you.</span><span>Results expire after 24 hours <span class="footer-dot">·</span> Download what you need</span></footer>
+    </div>
+  </main>
+</body>
+</html>
