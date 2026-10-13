@@ -21,7 +21,12 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from .converters import CONVERTERS, Cancelled, ConversionError, executable
+from .converters import CONVERTERS as CORE_CONVERTERS, Cancelled, ConversionError, executable
+from .advanced_converters import ADVANCED_CONVERTERS
+from .image_batch import convert_images
+
+CONVERTERS = {**CORE_CONVERTERS, **ADVANCED_CONVERTERS, 'image': convert_images}
+VERSION = '0.2.0'
 
 STATIC = Path(__file__).parent / "static"
 DATA = Path(os.environ.get("FILEFORGE_DATA_DIR", Path(tempfile.gettempdir()) / "fileforge-jobs"))
@@ -32,8 +37,15 @@ EXTENSIONS = {
     "spreadsheet": {".xlsx", ".csv"},
     "image": {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".gif"},
     "merge": {".pdf"},
+    "background": {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".gif"},
+    "trace": {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".gif"},
+    "crop": {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".gif"},
+    "pdfimages": {".pdf"}, "organize": {".pdf"}, "pdfpreview": {".pdf"},
 }
-LIMITS = {"video": 2_000_000_000, "spreadsheet": 50_000_000, "image": 100_000_000, "merge": 250_000_000}
+LIMITS = {"video": 2_000_000_000, "spreadsheet": 50_000_000, "image": 100_000_000, "merge": 250_000_000,
+          "background": 100_000_000, "trace": 100_000_000, "crop": 100_000_000,
+          "pdfimages": 250_000_000, "organize": 250_000_000, "pdfpreview": 250_000_000}
+MULTI_LIMIT = 500_000_000
 TERMINAL = {"completed", "failed", "cancelled"}
 jobs = {}
 lock = threading.RLock()
@@ -66,7 +78,8 @@ class Job:
                 "input_size": self.input_size,
                 "output_size": self.output.stat().st_size if self.output and self.output.exists() else None,
                 "output_name": self.output.name if self.output else None,
-                "download_url": f"/api/jobs/{self.id}/download" if self.status == "completed" else None}
+                "download_url": f"/api/jobs/{self.id}/download" if self.status == "completed" else None,
+                "preview_url": f"/api/jobs/{self.id}/preview" if self.status == "completed" and self.output and self.output.suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp', '.svg'} else None}
 
 
 def cleanup():
@@ -115,6 +128,8 @@ async def local_origin(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
+    if request.url.path.startswith('/api/'):
+        response.headers['Cache-Control'] = 'no-store'
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; "
         "connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'"
@@ -129,12 +144,14 @@ def index():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "video_available": bool(executable("ffmpeg") and executable("ffprobe")),
+    return {"status": "ok", "version": VERSION, "tools": [tool for tool in CONVERTERS if tool != 'pdfpreview'], "video_available": bool(executable("ffmpeg") and executable("ffprobe")),
             "max_file_bytes": LIMITS, "retention_hours": 24}
 
 
 def validate_options(tool, raw):
     try:
+        if len(raw) > 50_000:
+            raise ValueError()
         options = json.loads(raw)
         if not isinstance(options, dict):
             raise ValueError()
@@ -159,6 +176,47 @@ def validate_options(tool, raw):
             if orientation not in {"portrait", "landscape"}:
                 raise ValueError()
             return {"orientation": orientation}
+        if tool == 'background':
+            fill = options.get('fill', 'transparent')
+            if fill not in {'transparent', 'white'}:
+                raise ValueError()
+            return {'fill': fill}
+        if tool == 'trace':
+            precision = options.get('precision', 4)
+            detail = options.get('detail', 'balanced')
+            if type(precision) is not int or not 1 <= precision <= 8 or detail not in {'simple', 'balanced', 'fine'}:
+                raise ValueError()
+            return {'precision': precision, 'detail': detail}
+        if tool == 'crop':
+            rectangle = {key: options.get(key) for key in ('x', 'y', 'width', 'height')}
+            if any(type(value) is not int for value in rectangle.values()):
+                raise ValueError()
+            if any(not 0 <= rectangle[key] <= 40000 for key in ('x', 'y')) or any(not 1 <= rectangle[key] <= 40000 for key in ('width', 'height')):
+                raise ValueError()
+            output_format = options.get('format', 'png')
+            if output_format not in {'png', 'jpg', 'webp'}:
+                raise ValueError()
+            return {**rectangle, 'format': output_format}
+        if tool == 'pdfimages':
+            pages = options.get('pages', '')
+            edge = options.get('edge', 2400)
+            output_format = options.get('format', 'png')
+            if not isinstance(pages, str) or len(pages) > 500 or type(edge) is not int or edge not in {1200, 2400, 3600} or output_format not in {'png', 'jpg'}:
+                raise ValueError()
+            return {'pages': pages, 'edge': edge, 'format': output_format}
+        if tool == 'organize':
+            pages = options.get('pages')
+            if not isinstance(pages, list) or not 1 <= len(pages) <= 200:
+                raise ValueError()
+            plan = []
+            for page in pages:
+                if not isinstance(page, dict):
+                    raise ValueError()
+                values = {key: page.get(key) for key in ('file_index', 'page_index', 'rotation')}
+                if any(type(value) is not int for value in values.values()) or not 0 <= values['file_index'] < 20 or not 0 <= values['page_index'] < 2500 or values['rotation'] not in {0, 90, 180, 270}:
+                    raise ValueError()
+                plan.append(values)
+            return {'pages': plan}
         return {}
     except (ValueError, TypeError, OverflowError) as exc:
         raise HTTPException(400, "Invalid conversion settings.") from exc
@@ -206,8 +264,9 @@ async def create_job(tool: str = Form(...), options: str = Form("{}"), files: li
     if tool not in CONVERTERS:
         raise HTTPException(400, "Choose a supported conversion tool.")
     settings = validate_options(tool, options)
-    if (tool != "merge" and len(files) != 1) or (tool == "merge" and not 2 <= len(files) <= 20):
-        raise HTTPException(400, "Select 2-20 PDFs to merge, or one file for other tools.")
+    minimum, maximum = (2, 20) if tool == 'merge' else (1, 20) if tool in {'organize', 'pdfpreview'} else (1, 50) if tool == 'image' else (1, 1)
+    if not minimum <= len(files) <= maximum:
+        raise HTTPException(400, f'Select {minimum}-{maximum} files for this tool.')
     with lock:
         if sum(job.status not in TERMINAL for job in jobs.values()) >= 8:
             raise HTTPException(429, "The queue is full. Wait for a conversion to finish.")
@@ -230,6 +289,8 @@ async def create_job(tool: str = Form(...), options: str = Form("{}"), files: li
                     size += len(chunk)
                     if size > LIMITS[tool]:
                         raise HTTPException(413, f"File exceeds this tool's {LIMITS[tool] / 1_000_000:g} MB limit.")
+                    if maximum > 1 and job.input_size + size > MULTI_LIMIT:
+                        raise HTTPException(413, 'Keep the selection under 500 MB total.')
                     stream.write(chunk)
             if not size:
                 raise HTTPException(400, "Empty files cannot be converted.")
@@ -276,6 +337,15 @@ def download(identifier: str):
     if job.status != "completed" or not job.output:
         raise HTTPException(409, "This conversion is not ready to download.")
     return FileResponse(job.output, filename=job.output.name, media_type="application/octet-stream")
+
+
+@app.get('/api/jobs/{identifier}/preview')
+def preview_output(identifier: str):
+    job = find_job(identifier)
+    types = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml'}
+    if job.status != 'completed' or not job.output or job.output.suffix.lower() not in types:
+        raise HTTPException(409, 'This result has no image preview.')
+    return FileResponse(job.output, media_type=types[job.output.suffix.lower()])
 
 
 @app.post("/api/jobs/{identifier}/cancel")

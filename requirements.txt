@@ -5,3 +5,7 @@ Pillow>=11,<13
 openpyxl>=3.1,<4
 reportlab>=4.3,<5
 pypdf>=5,<7
+numpy==2.5.4
+onnxruntime==1.31.0
+vtracer==0.6.15
+pypdfium2==5.14.0

@@ -182,3 +182,50 @@ def test_cancel_queued_or_running_job(client, monkeypatch):
     job = wait(client, identifier)
     assert job["status"] == "cancelled"
     assert job["download_url"] is None
+
+
+def test_toolbox_health_validation_and_private_preview(client):
+    health = client.get('/api/health').json()
+    assert health['version'] == '0.2.0'
+    assert len(health['tools']) == 9 and 'pdfpreview' not in health['tools']
+    bad = [('background', {'fill': 'remote'}), ('trace', {'precision': True}),
+           ('crop', {'x': 0, 'y': 0, 'width': -1, 'height': 20}),
+           ('pdfimages', {'edge': 9999}), ('organize', {'pages': []})]
+    for tool, options in bad:
+        response = client.post('/api/jobs', data={'tool': tool, 'options': json.dumps(options)},
+                               files={'files': ('source.pdf' if tool in {'organize', 'pdfimages'} else 'source.png', b'fixture')})
+        assert response.status_code == 400
+    job = wait(client, submit(client, 'image', [('source.png', image_bytes())], {'format': 'png'})['id'])
+    preview = client.get(job['preview_url'])
+    assert preview.status_code == 200 and preview.headers['content-type'].startswith('image/png')
+    assert preview.headers['cache-control'] == 'no-store'
+    assert Image.open(io.BytesIO(preview.content)).size == (200, 100)
+    assert client.delete(f"/api/jobs/{job['id']}").status_code == 200
+    assert client.get(job['preview_url']).status_code == 404
+
+
+def test_batch_images_keep_duplicate_names_distinct_and_combine_pdf(client):
+    files = [('Photo.png', image_bytes()), ('photo.PNG', image_bytes())]
+    job = wait(client, submit(client, 'image', files, {'format': 'png', 'width': 100})['id'])
+    with zipfile.ZipFile(io.BytesIO(download(client, job))) as archive:
+        names = archive.namelist()
+        assert len(names) == len({name.lower() for name in names}) == 2
+        for name in names:
+            assert Image.open(io.BytesIO(archive.read(name))).size == (100, 50)
+    combined = wait(client, submit(client, 'image', files, {'format': 'pdf'})['id'])
+    assert len(PdfReader(io.BytesIO(download(client, combined))).pages) == 2
+
+
+def test_pdf_preview_and_organizer_use_source_pages_and_rotation(client):
+    files = [('first.pdf', pdf_bytes(100)), ('second.pdf', pdf_bytes(200))]
+    preview = wait(client, submit(client, 'pdfpreview', files)['id'])
+    cards = json.loads(download(client, preview))['pages']
+    assert len(cards) == 2
+    assert cards[1]['file_index'] == 1 and cards[1]['page_index'] == 0
+    assert cards[0]['thumbnail'].startswith('data:image/png;base64,')
+    plan = [{'file_index': 1, 'page_index': 0, 'rotation': 90}, {'file_index': 0, 'page_index': 0, 'rotation': 0}]
+    job = wait(client, submit(client, 'organize', files, {'pages': plan})['id'])
+    pages = PdfReader(io.BytesIO(download(client, job))).pages
+    assert len(pages) == 2
+    assert float(pages[0].mediabox.width) == 200 and pages[0].rotation == 90
+    assert float(pages[1].mediabox.width) == 100

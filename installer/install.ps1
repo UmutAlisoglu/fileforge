@@ -18,21 +18,21 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'uninstall.ps1') -Destination $i
 if (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'THIRD_PARTY_NOTICES.txt')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'THIRD_PARTY_NOTICES.txt') -Destination $installRoot -Force
 }
-@{ installPath = $installRoot; app = 'FileForge'; version = '0.1.0' } | ConvertTo-Json | Set-Content -LiteralPath $marker -Encoding UTF8
+@{ installPath = $installRoot; app = 'FileForge'; version = '0.2.0' } | ConvertTo-Json | Set-Content -LiteralPath $marker -Encoding UTF8
 if (-not $SkipShortcuts) {
     $shellObject = New-Object -ComObject WScript.Shell
     $startMenu = [Environment]::GetFolderPath('Programs')
     $shortcut = $shellObject.CreateShortcut((Join-Path $startMenu 'FileForge.lnk'))
     $shortcut.TargetPath = Join-Path $installRoot 'FileForge.exe'
     $shortcut.WorkingDirectory = $installRoot
-    $shortcut.Description = 'Local video, spreadsheet, image and PDF tools'
+    $shortcut.Description = 'Private video, spreadsheet, image and PDF tools'
     $shortcut.Save()
 }
 if (-not $SkipRegistration) {
     $registryPath = 'HKCU:/Software/Microsoft/Windows/CurrentVersion/Uninstall/FileForge'
     New-Item -Path $registryPath -Force | Out-Null
     New-ItemProperty -Path $registryPath -Name DisplayName -Value 'FileForge' -PropertyType String -Force | Out-Null
-    New-ItemProperty -Path $registryPath -Name DisplayVersion -Value '0.1.0' -PropertyType String -Force | Out-Null
+    New-ItemProperty -Path $registryPath -Name DisplayVersion -Value '0.2.0' -PropertyType String -Force | Out-Null
     New-ItemProperty -Path $registryPath -Name InstallLocation -Value $installRoot -PropertyType String -Force | Out-Null
     New-ItemProperty -Path $registryPath -Name DisplayIcon -Value (Join-Path $installRoot 'FileForge.exe') -PropertyType String -Force | Out-Null
     $uninstallCommand = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $installRoot 'uninstall.ps1') + '"'

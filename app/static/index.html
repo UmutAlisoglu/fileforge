@@ -3,36 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#192323">
+  <meta name="theme-color" content="#282735">
   <title>FileForge — Your file workshop</title>
   <link rel="stylesheet" href="/static/styles.css">
   <script src="/static/app.js" defer></script>
 </head>
 <body>
   <aside class="sidebar">
-    <a class="brand" href="/" aria-label="FileForge home"><span class="brand-mark">f<span>↗</span></span>FileForge<span class="version">01</span></a>
+    <a class="brand" href="/" aria-label="FileForge home"><span class="brand-mark">f<span>↗</span></span>FileForge<span class="version">0.2.0</span></a>
     <div class="sidebar-caption">WORKSPACE</div>
     <nav aria-label="Conversion tools" id="navigation"></nav>
     <div class="sidebar-bottom">
       <div class="local-indicator"><span></span> Runs on your computer</div>
       <p>Your files stay here.<br>No accounts. No cloud uploads.</p>
-      <span class="build-label">FILEFORGE / FIRST EDITION</span>
+      <span class="build-label">FILEFORGE / DESKTOP</span>
     </div>
   </aside>
   <main>
     <header class="topbar"><span>Workspace <span class="breadcrumb">/</span> <strong id="breadcrumb-tool">Video compression</strong></span><span class="local-pill"><span></span> Local workspace</span></header>
     <div class="content">
-      <div class="intro">
-        <div><p class="eyebrow">THE EVERYDAY FILE WORKSHOP</p><h1>File tools, in one place<span>.</span></h1><p class="subtitle">Make it smaller. Change its format. Keep things moving.</p></div>
-        <div class="intro-note"><span class="note-symbol">↙</span><span>Pick a tool.<br>Bring your file.</span></div>
-      </div>
+      <div class="intro"><div><p class="eyebrow">YOUR EVERYDAY FILE TOOLBOX</p><h1>What would you like to do<span>?</span></h1><p class="subtitle">Convert, compress and edit. Everything runs on your computer.</p></div></div>
+      <section class="tool-finder" aria-label="Find a tool"><label for="tool-search">Find your next task</label><input id="tool-search" type="search" placeholder="Try PNG to PDF, remove background or crop…" autocomplete="off"><div class="categories" id="tool-categories" role="group" aria-label="Filter tools"></div><p id="search-summary" class="search-summary" aria-live="polite"></p></section>
       <div class="tool-grid" id="tool-grid" aria-label="Choose a tool"></div>
       <section class="converter" aria-labelledby="converter-title">
         <div class="converter-heading"><div><p class="eyebrow" id="tool-category">VIDEO / MP4</p><h2 id="converter-title">Compress video</h2><p id="converter-description">A smaller MP4, ready for sharing.</p></div><span class="tool-number" id="tool-number">01</span></div>
         <div id="error-banner" class="error-banner" role="alert" hidden></div>
         <div class="converter-body">
           <div class="source-panel">
-            <div class="section-label"><span>01</span> Source file</div>
+            <div class="source-heading"><div class="section-label"><span>01</span> Source files</div><button type="button" class="text-button" id="clear-files" disabled>Clear files</button></div>
             <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Choose or drop a source file">
               <div class="upload-icon" aria-hidden="true">↑</div>
               <h3 id="drop-title">Drop your video here</h3>
@@ -42,19 +40,22 @@
             <input type="file" id="file-input" hidden>
             <div class="selected-files" id="selected-files" aria-live="polite"></div>
             <p class="source-note" id="source-note">The original file stays unchanged.</p>
+            <div id="source-preview" class="source-preview" hidden><img id="source-image" alt="Selected image preview"><p id="source-dimensions"></p></div>
           </div>
           <div class="settings-panel">
             <div class="section-label"><span>02</span> Output settings</div>
             <form id="settings-form"></form>
           </div>
         </div>
+        <section id="crop-workspace" class="crop-workspace" aria-label="Crop preview" hidden><div class="workspace-heading"><div><h3>Choose the area to keep</h3><p>Drag on the image, or use the exact pixel settings above.</p></div><button type="button" class="text-button" id="reset-crop">Reset crop</button></div><canvas id="crop-canvas" aria-label="Image crop preview. Use the X, Y, width and height fields to set the crop without a pointer."></canvas><p class="field-help" id="crop-status" aria-live="polite"></p></section>
+        <section id="organizer-workspace" class="organizer-workspace" aria-label="PDF page organizer" hidden><div class="workspace-heading"><div><h3>Arrange your pages</h3><p>Move, rotate or deselect pages. Your original PDFs stay unchanged.</p></div><button type="button" class="text-button" id="reset-pages">Reset pages</button></div><p id="page-status" class="field-help" aria-live="polite"></p><div id="page-grid" class="page-grid"></div></section>
         <div class="converter-footer"><div class="privacy-note"><span aria-hidden="true">◈</span><span>Processed locally on your computer</span></div><button class="primary-button" id="convert-button" disabled>Compress video <span aria-hidden="true">↗</span></button></div>
       </section>
       <section class="activity" aria-labelledby="activity-title">
         <div class="activity-heading"><div><h2 id="activity-title">Your conversions <span id="job-count">0</span></h2><p>Download your results here.</p></div><button class="text-button" id="clear-history" disabled>Clear completed</button></div>
         <div id="jobs" aria-live="polite"><div class="empty-state"><span class="empty-icon" aria-hidden="true">↳</span><div><strong>A fresh workspace</strong><p>Your conversions will appear here when you start.</p></div></div></div>
       </section>
-      <footer class="page-footer"><span>Built for files. Designed for you.</span><span>Results expire after 24 hours <span class="footer-dot">·</span> Download what you need</span></footer>
+      <footer class="page-footer"><span>FileForge 0.2.0 <span class="footer-dot">·</span> Built for files. Designed for you.</span><span>Results expire after 24 hours <span class="footer-dot">·</span> Download what you need</span></footer>
     </div>
   </main>
 </body>
