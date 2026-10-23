@@ -186,7 +186,7 @@ def test_cancel_queued_or_running_job(client, monkeypatch):
 
 def test_toolbox_health_validation_and_private_preview(client):
     health = client.get('/api/health').json()
-    assert health['version'] == '0.2.0'
+    assert health['version'] == '0.3.0'
     assert len(health['tools']) == 9 and 'pdfpreview' not in health['tools']
     bad = [('background', {'fill': 'remote'}), ('trace', {'precision': True}),
            ('crop', {'x': 0, 'y': 0, 'width': -1, 'height': 20}),

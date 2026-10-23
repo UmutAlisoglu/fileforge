@@ -1,95 +1,66 @@
-# Learning from FileForge
+# Working on FileForge Desktop
 
-FileForge has two editions. The [website](https://alisoglu.com/tools/) runs JavaScript engines inside the browser; this repository runs Python and native libraries inside a Windows application. Both process files on the user's device. A website deployment changes what visitors open next time. A desktop update needs a new executable and downloadable release.
+FileForge 0.3.0 combines a connected workspace with the existing native conversion service. Both run on the user's computer. The desktop release includes its engines; the website is not opened remotely inside the app.
 
-## How the desktop application works
+## Architecture
 
-1. `desktop.py` starts a local service on an unused `127.0.0.1` port, then opens a WebView2 window showing that address.
-2. `app/static/index.html`, `app.js` and `styles.css` provide the interface. JavaScript sends selected files and settings to the local service, polls the job status, and presents downloads.
-3. `app/main.py` validates settings, accepts temporary copies of files, manages the job queue, and handles cancellation, result downloads and cleanup.
-4. `app/converters.py` and its converter registry dispatch to the conversion engines. Each engine writes to the job's temporary folder, reports progress and checks for cancellation.
-5. `build.ps1` packages the interface, Python runtime, conversion libraries and background model into one executable. The installer copies that executable for the current Windows user and creates a shortcut.
+1. `desktop.py` starts FastAPI on an unused 127.0.0.1 port, then opens the real WebView2 window. The root opens `/tools/workspace/`. Missing or mismatched workspace files produce an actionable startup error.
+2. `tools/prepare_workspace.py` archives the exact website commit in `workspace-source.json`, adapts navigation and builds the static tool runtime. All engines, models, fonts and OCR languages are copied into ignored `app/workspace/`. The manifest records public source provenance and SHA-256 hashes.
+3. `app/workspace.py` locates that folder in source or next to the packaged executable. `app/main.py` serves those public assets locally. Nothing proxies visitors' documents to the website.
+4. The workspace processes selected files in JavaScript workers and passes results between compatible tools in memory. Its original tool limits, cancellation, Office isolation and archive checks remain in place.
+5. `/native/` keeps `app/static/` and the existing job service. `app/converters.py`, `app/advanced_converters.py` and `app/image_batch.py` run Python/native engines for larger inputs. Native source copies, queued jobs and result retention are separate from workspace memory.
 
-`127.0.0.1` means "this computer". It is not an internet server. A file request in the desktop application's developer tools refers to a temporary copy on the user's computer; it is not a cloud upload.
+The service keeps loopback host and origin checks. Workspace responses allow same-origin workers/iframes and local WebAssembly, with COOP/COEP headers for isolated engines. External runtime connections remain blocked. Only the isolated finish worker receives JavaScript function-generation permission, required by libheif's Embind bindings; pages and the other workers do not.
 
-The native libraries cover different jobs: Pillow reads and edits pictures; vtracer creates SVG paths; ONNX Runtime executes the bundled U²-Net background model; pypdf edits document pages; PDFium renders PDF pages; ReportLab builds new PDFs; openpyxl reads workbooks; FFmpeg/FFprobe inspect and encode videos.
+## Rebuild the workspace
 
-## Run the source safely
-
-Install Python 3.12+ and WebView2. Video compression also needs FFmpeg and FFprobe on PATH. Run `run.cmd` from the repository. The launcher creates a private `.venv` so project dependencies do not need to be installed into your global Python environment.
-
-After pulling an update, refresh dependencies explicitly:
+Install Python 3.14 and Node.js 24 on the build machine. Users of the finished app do not need them.
 
 ```powershell
-.venv\Scripts\python -m pip install -r requirements-desktop.txt
-.venv\Scripts\python -m pip install -r requirements-dev.txt
+.venv\Scripts\python -m pip install -r requirements-desktop.txt -r requirements-dev.txt
+.venv\Scripts\python tools/prepare_workspace.py
+.venv\Scripts\python tools/prepare_workspace.py --verify
 ```
 
-You can inspect the interface in a browser while keeping the Python engines:
+For an existing website checkout, use `--source C:\path\to\website`. The builder uses `git archive` on the pinned commit, so it never bundles uncommitted work, credentials or node_modules. It builds in a temporary `.build/` directory. Only a directory with the FileForge workspace marker can be replaced at the fixed generated output path.
+
+Changing `workspace-source.json` is an explicit desktop update. Review that revision, adapt the builder if needed, rebuild, and rerun the checks. Do not fetch new tools or overwrite an installed workspace at runtime. The package's normal modules are replaceable so LGPL engines can be modified by recipients; startup does not reject such modifications based on content hashes. Build-time verification catches accidental source/package drift.
+
+## Verify source and packaged behavior
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File run.ps1 -Browser
-```
-
-Open `http://127.0.0.1:8765`. Keep the service on the loopback address. No router configuration, hosting account or paid API is required.
-
-## Add another tool
-
-Start with one real input/output example: what is selected, which settings matter, and what should the downloaded result contain?
-
-1. Write an engine that accepts the job's source paths and settings, writes its result into the job directory, and returns the result path. Keep source files unchanged. Report progress and check cancellation between expensive steps.
-2. Register its key in `CONVERTERS`. Add supported extensions, size/count limits and setting validation in `app/main.py`.
-3. Add a tool card and accessible settings controls in `app/static/app.js`. Use the same key as the backend. Validate inputs in both places: the UI helps the user, and the service enforces the rules.
-4. If a new runtime package is needed, add it to `requirements.txt`. Add its native resources to `build.ps1` when necessary and include its notices in `tools/third_party_notices.py`.
-5. Test a real successful export, invalid files/options, cancellation and the limits that protect memory or disk usage. Open the built executable too: a source test cannot show that a required DLL was missing from the ZIP.
-
-Background removal illustrates this process. Its model lives in `app/models/`, with its source link, checksum and license. The build checks that checksum and bundles the weights. Processing stays offline; the model is loaded from the packaged application instead of being downloaded during a conversion.
-
-## Verify a change
-
-```powershell
+.venv\Scripts\python tools/prepare_test_fixture.py
 .venv\Scripts\python -m pytest tests -q
-powershell -ExecutionPolicy Bypass -File build.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1
 ```
 
-The tests create disposable fixtures. Keep that approach when adding tests rather than depending on personal documents or photographs.
+Tests create generated files and a checksum-pinned public background-model fixture. They check actual native output, limits, cancellation, temporary-file cleanup, host/origin protection, workspace completeness and HTTP policies. The CI workflow prepares the pinned workspace before running them.
 
-Check actual output files. A PNG should have the intended dimensions/transparency; an SVG should contain paths; a PDF should contain the expected pages; a ZIP should extract with sensible names. For video compression, compare the finished file's bytes with the requested maximum and inspect its duration. Test the Cancel button during a meaningful job.
-
-Run the native smoke test from a process that can observe its exit code:
+Run a native smoke test without installing over the user's app:
 
 ```powershell
-$smokeReport = Join-Path $PWD '.build/native-smoke.json'
-$smokeProcess = Start-Process -FilePath (Join-Path $PWD 'release/FileForge.exe') -ArgumentList @('--smoke-test', ('"' + $smokeReport + '"')) -WindowStyle Hidden -PassThru -Wait
-Get-Content -LiteralPath $smokeReport
-if ($smokeProcess.ExitCode -ne 0) { throw 'The native application smoke test failed.' }
+$smokeProcess = Start-Process -FilePath (Join-Path $PWD 'release/FileForge.exe') -ArgumentList @('--smoke-test', '.qa/native-smoke.json', '--smoke-image', '.qa/fixtures/u2net-horse.jpg') -WindowStyle Hidden -PassThru -Wait
+Get-Content .qa/native-smoke.json
+if ($smokeProcess.ExitCode -ne 0) { throw 'Packaged checks failed.' }
 ```
 
-The executable opens its real WebView2 interface and checks the nine tool cards and service version. It then submits disposable generated files to its own job service and checks the packaged crop, SVG tracing and PDF rendering engines. The JSON report records actual dimensions, pixels and SVG paths. Add `--smoke-image C:\path\to\public-subject.jpg` to include a suitable public photo and verify foreground retention and background transparency using the bundled model. That optional fixture is not shipped. Test jobs and outputs are removed before the window closes.
+The real WebView2 window checks rendered workspace controls and uses disposable DOCX/PPTX fixtures to export actual two-page PDFs with images. Text → PDF is checked for selectable multilingual text; JSON → CSV is checked for real data. Existing native checks validate pixels, dimensions, SVG vector paths and background alpha. The report does not contain user documents. The watchdog prevents an indefinitely hung test.
 
-The smoke test does not install the application. If WebView2 is absent, the service cannot start or a packaged conversion engine is missing, the report explains the failure. `multiprocessing.freeze_support()` runs before the desktop CLI because the isolated SVG worker may launch a child copy of the frozen executable; otherwise that child could open a second application window instead of running its conversion.
+`tools/browser_smoke.mjs` checks the native interface in Chrome against `http://127.0.0.1:8765`; use `run.ps1 -Browser` for that local preview. Set `FILEFORGE_SITE_ROOT` to a website checkout with Playwright installed when reusing its development dependencies. The website's engine/browser checks can also target this local origin with `TEST_URL`, adjusting website-only navigation assertions for the desktop shell. Browser tools must perform only same-origin GETs and blob operations; only native jobs use local POST requests.
 
-## Build and distribute
+## Package and publish
 
-The executable embeds Python, so visitors do not need a Python installation. PyInstaller's `--onefile` format extracts its runtime to a temporary location when launched. New image and PDF engines add native binaries; excluding NumPy would break background removal. `build.ps1` includes the required engines and keeps unrelated GUI/scientific packages excluded.
+`build.ps1` verifies the pinned workspace before building. Native Python libraries, the compact background model, UI and smoke fixtures are embedded in FileForge.exe. The workspace remains a separate folder so engines are replaceable and startup need not extract every browser runtime from the executable. All license copies and source references must be retained.
 
-The `release/` folder should contain:
+The ZIP contains only these release-root entries:
 
 - `FileForge.exe`
-- `install.cmd` and `install.ps1`
-- `uninstall.ps1`
+- `workspace/`
+- `install.cmd`, `install.ps1`, `uninstall.ps1`
 - `THIRD_PARTY_NOTICES.txt`
 
-Zip those files at the archive root so the installer stays beside the executable. Do not zip `.venv`, user documents, the whole checkout or build caches. Do not commit generated executables to Git; attach them to a GitHub Release.
+`tools/package_release.py` verifies the manifest, packages that folder and emits SHA256SUMS.txt. No .venv, repository metadata, build logs or test outputs belong in the ZIP. The installer copies both the executable and workspace into its verified app folder; user documents are never an installation input.
 
-## Publish an update on GitHub
+Keep the version consistent in `desktop.py`, `app/main.py`, workspace-source.json, the desktop header adapter, installer, help, notices and README. Commit tested source and publish a versioned GitHub release with the ZIP, checksum and native smoke report. Download the exact uploaded asset into an isolated verification folder, compare its checksum, extract it and run its executable's smoke test. Test installation in a new .qa folder with `-SkipShortcuts -SkipRegistration -SkipLaunch`, not over the user's real installation.
 
-Before release, keep the version consistent in the service health response, `desktop.py`, installer metadata, README and generated notices. Run the tests and built-application checks, record the archive checksum, and confirm the downloadable ZIP contains the installer and notices.
-
-The GitHub test workflow runs the Python conversion checks on Windows after pushes and pull requests. `tools/prepare_test_fixture.py` downloads one public U²-Net example, verifies its checksum and puts it inside ignored `.qa/fixtures/`. Run it before tests to include the real-photo background checks. No test reads an image from another checkout. `requirements-lock-windows.txt` records the exact environment used for this Windows release; the main requirements files remain the normal installation entry point.
-
-Commit and push the source changes, then create a tag such as `v0.2.0` for that tested commit. Upload `FileForge-Windows.zip` as a release asset using GitHub's Releases page or `gh release create` with a release-notes file. Release notes should describe the finished features, their limits, requirements such as WebView2/FFmpeg, and the validation actually performed.
-
-After uploading, download that exact asset into a temporary verification folder, check its checksum, extract it, and run its native smoke test. Publishing a release is complete only when someone can download the intended files and launch them.
-
-Finally, update the website's Downloads page and FileForge project guide with the new release link, version, size and feature comparison. Existing installed copies stay on their old version until the user downloads and installs the update.
+Finally update the website's download URLs, release size/date and feature comparison. Installed copies are updated only when the user downloads and installs the new release.

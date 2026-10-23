@@ -17,16 +17,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .converters import CONVERTERS as CORE_CONVERTERS, Cancelled, ConversionError, executable
 from .advanced_converters import ADVANCED_CONVERTERS
 from .image_batch import convert_images
+from .workspace import WORKSPACE, workspace_manifest
 
 CONVERTERS = {**CORE_CONVERTERS, **ADVANCED_CONVERTERS, 'image': convert_images}
-VERSION = '0.2.0'
+VERSION = '0.3.0'
 
 STATIC = Path(__file__).parent / "static"
 DATA = Path(os.environ.get("FILEFORGE_DATA_DIR", Path(tempfile.gettempdir()) / "fileforge-jobs"))
@@ -117,6 +118,9 @@ async def lifespan(app):
 app = FastAPI(title="FileForge", lifespan=lifespan)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "[::1]"])
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
+for folder in ('tools', 'vendor', 'fonts', 'licenses', 'icons', 'assets'):
+    if (WORKSPACE / folder).is_dir():
+        app.mount('/' + folder, StaticFiles(directory=WORKSPACE / folder, html=True), name='workspace-' + folder)
 
 
 @app.middleware("http")
@@ -130,22 +134,66 @@ async def local_origin(request: Request, call_next):
     response.headers["Referrer-Policy"] = "no-referrer"
     if request.url.path.startswith('/api/'):
         response.headers['Cache-Control'] = 'no-store'
-    response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; "
-        "connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'"
-    )
+    workspace_page = request.url.path.startswith(('/tools/', '/vendor/', '/assets/', '/fonts/', '/licenses/'))
+    if workspace_page:
+        # libheif's Embind bindings generate functions inside the isolated
+        # finish worker. Keep that permission out of every page and other engine.
+        script_policy = "'self' 'wasm-unsafe-eval'"
+        if request.url.path.startswith('/tools/_assets/finish.worker-'):
+            script_policy += " 'unsafe-eval'"
+        response.headers['Content-Security-Policy'] = (
+            f"default-src 'self'; script-src {script_policy}; style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' blob: data:; font-src 'self' data:; connect-src 'self' blob:; "
+            "worker-src 'self' blob:; frame-src 'self' blob:; media-src 'self' blob: data:; "
+            "object-src 'none'; frame-ancestors 'self'; form-action 'self'; base-uri 'self'"
+        )
+    else:
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; "
+            "connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'"
+        )
+    response.headers['Cross-Origin-Opener-Policy'] = 'same-origin'
+    response.headers['Cross-Origin-Embedder-Policy'] = 'require-corp'
+    response.headers['Cross-Origin-Resource-Policy'] = 'same-origin'
     return response
 
 
 @app.get("/")
 def index():
+    if workspace_manifest():
+        return RedirectResponse('/tools/workspace/', status_code=307)
     return FileResponse(STATIC / "index.html")
+
+
+@app.get('/native/')
+def native_tools():
+    return FileResponse(STATIC / 'index.html')
+
+
+@app.get('/desktop-help/')
+def desktop_help():
+    return FileResponse(STATIC / 'desktop-help.html')
+
+
+@app.get('/workspace-notices')
+def workspace_notices():
+    if not workspace_manifest():
+        raise HTTPException(404, 'Prepare the desktop workspace first.')
+    return FileResponse(WORKSPACE / 'THIRD_PARTY_NOTICES.md', media_type='text/plain')
+
+
+@app.get('/workspace-source')
+def workspace_source():
+    if not workspace_manifest():
+        raise HTTPException(404, 'Prepare the desktop workspace first.')
+    return FileResponse(WORKSPACE / 'SOURCE.md', media_type='text/plain')
 
 
 @app.get("/api/health")
 def health():
     return {"status": "ok", "version": VERSION, "tools": [tool for tool in CONVERTERS if tool != 'pdfpreview'], "video_available": bool(executable("ffmpeg") and executable("ffprobe")),
-            "max_file_bytes": LIMITS, "retention_hours": 24}
+            "max_file_bytes": LIMITS, "retention_hours": 24,
+            "workspace": {key: value for key, value in (workspace_manifest() or {}).items() if key != 'files'}}
 
 
 def validate_options(tool, raw):

@@ -8,3 +8,5 @@ release/
 *.spec
 .data-tests/
 .qa/
+app/workspace/
+*.log

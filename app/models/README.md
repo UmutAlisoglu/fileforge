@@ -1,6 +1,6 @@
 # Offline background removal model
 
-FileForge 0.2.0 bundles the unmodified U²-Net small (U2NETP) model by Xuebin Qin and contributors, under Apache-2.0. The Windows application can remove backgrounds without downloading a model at runtime or sending the picture to an AI service.
+FileForge 0.3.0 bundles the unmodified U²-Net small (U2NETP) model by Xuebin Qin and contributors, under Apache-2.0. The Windows application can remove backgrounds without downloading a model at runtime or sending the picture to an AI service.
 
 - Architecture and source: https://github.com/xuebinqin/U-2-Net
 - ONNX weights distributed by rembg: https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx

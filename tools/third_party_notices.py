@@ -28,8 +28,9 @@ def is_notice(item):
 
 def main():
     blocks = [
-        "FileForge 0.2.0 - Third-party notices\n\n"
-        "FFmpeg and FFprobe are separately installed external tools and are not bundled.\n"
+        "FileForge 0.3.0 - Third-party notices\n\n"
+        "Native FFmpeg and FFprobe are separately installed external tools and are not bundled.\n"
+        "The connected workspace includes its own FFmpeg WebAssembly engine and other replaceable browser runtimes in workspace/.\n"
         "The following notices cover the Python runtime, conversion libraries and native components distributed in this release.\n"
     ]
     for name in PACKAGES:
@@ -59,6 +60,11 @@ def main():
         if not path.is_file():
             raise RuntimeError(f"The bundled model notice is missing: {path}")
         blocks.append(f"\n{filename}\n{path.read_text(encoding='utf-8')}\n")
+
+    workspace = ROOT / 'app/workspace'
+    blocks.append("\n" + '=' * 72 + "\nConnected workspace components\nFull license copies and replaceable modules are shipped in workspace/licenses/ and workspace/vendor/.\n")
+    for filename in ('THIRD_PARTY_NOTICES.md', 'SOURCE.md'):
+        blocks.append((workspace / filename).read_text(encoding='utf-8'))
 
     output_directory = ROOT / "release"
     output_directory.mkdir(parents=True, exist_ok=True)

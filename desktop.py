@@ -12,7 +12,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 EXPECTED_TOOLS = 9
 
 
@@ -20,6 +20,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--smoke-test", metavar="REPORT", help="Open the actual native window, verify it, then close.")
     parser.add_argument("--smoke-image", metavar="IMAGE", help="An optional public subject image for the smoke test's bundled background model check.")
+    parser.add_argument("--smoke-heic", metavar="IMAGE", help="An optional public HEIC fixture for the packaged WebView2 decoder check.")
     args = parser.parse_args()
     # PyInstaller's windowed bootloader provides no stdout/stderr handles.
     if sys.stdout is None:
@@ -29,6 +30,9 @@ def main():
     import uvicorn
     import webview
     from app.main import app
+    from app.workspace import workspace_manifest
+    if not workspace_manifest() or workspace_manifest().get('version') != VERSION:
+        raise RuntimeError('The matching workspace folder is missing. Extract the complete FileForge-Windows.zip and keep workspace beside FileForge.exe. Developers: run tools/prepare_workspace.py before launching.')
 
     log_dir = Path(os.environ.get("TEMP", ".")) / "fileforge-logs"
     log_dir.mkdir(exist_ok=True)
@@ -66,10 +70,13 @@ def main():
                 with urllib.request.urlopen(url + "/api/health", timeout=10) as response:
                     report["health"] = json.load(response)
                 report["title"] = window.evaluate_js("document.title")
-                report["tools"] = window.evaluate_js("document.querySelectorAll('#tool-grid button').length")
+                report["tools"] = len(report["health"]["tools"])
+                report["workspace_ui"] = window.evaluate_js("document.querySelectorAll('[data-workspace-launcher]').length")
                 report["body"] = window.evaluate_js("document.querySelector('h1').textContent")
                 from tools.frozen_checks import run_checks
                 report["conversions"] = run_checks(url, args.smoke_image)
+                from tools.workspace_checks import run_checks as run_workspace_checks
+                report["workspace_conversions"] = run_workspace_checks(window, args.smoke_heic)
                 report["ok"] = (
                     report["tools"] == EXPECTED_TOOLS
                     and report["health"]["status"] == "ok"
@@ -77,6 +84,9 @@ def main():
                     and "FileForge" in report["title"]
                     and bool(report["conversions"])
                     and all(check["ok"] for check in report["conversions"].values())
+                    and report["workspace_ui"] == 1
+                    and report["health"].get("workspace", {}).get("task_count") == 22
+                    and all(check["ok"] for check in report["workspace_conversions"].values())
                 )
                 if not report["ok"]:
                     report["error"] = "The native UI, service version or a frozen conversion engine failed its release check."
@@ -93,8 +103,8 @@ def main():
         window.events.loaded += inspect
 
         def watchdog():
-            if not smoke_done.wait(120):
-                smoke_result["error"] = "The native interface or conversion checks did not finish within 120 seconds."
+            if not smoke_done.wait(300):
+                smoke_result["error"] = "The native interface or conversion checks did not finish within 300 seconds."
                 report_path.write_text(json.dumps(smoke_result, indent=2), encoding="utf-8")
                 window.destroy()
 

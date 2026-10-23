@@ -70,7 +70,7 @@ try {
   await page.setContent('<h1 style="font:30px Arial">OTHER DOCUMENT</h1>');
   const pdf2=path.join(output,'one-page.pdf');await page.pdf({path:pdf2,format:'A4'});
   tracking=true;
-  await page.goto(base);await page.locator('#navigation [data-tool]').first().waitFor();
+  await page.goto(base+'/native/');await page.locator('#navigation [data-tool]').first().waitFor();
   assert.equal(await page.locator('#navigation [data-tool]').count(),9);
   assert.equal(await page.locator('.tool-card').count(),9);
   await page.screenshot({path:path.join(output,'desktop-directory.png'),fullPage:true});
