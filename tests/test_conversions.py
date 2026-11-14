@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from openpyxl import Workbook
 from PIL import Image
 from pypdf import PdfReader, PdfWriter
 
@@ -60,7 +61,7 @@ def pdf_bytes(width):
     return result.getvalue()
 
 
-def workbook_bytes():
+def workbook_bytes(dimension):
     # Minimal OOXML fixture with cached and uncached formulas plus a hidden sheet.
     result = io.BytesIO()
     with zipfile.ZipFile(result, "w") as archive:
@@ -68,7 +69,9 @@ def workbook_bytes():
         archive.writestr("_rels/.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>')
         archive.writestr("xl/workbook.xml", '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sales" sheetId="1" r:id="rId1"/><sheet name="Hidden" sheetId="2" state="hidden" r:id="rId2"/></sheets></workbook>')
         archive.writestr("xl/_rels/workbook.xml.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/></Relationships>')
-        archive.writestr("xl/worksheets/sheet1.xml", '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:C3"/><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>City</t></is></c><c r="B1" t="inlineStr"><is><t>Total</t></is></c><c r="C1" t="inlineStr"><is><t>Formula</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>München</t></is></c><c r="B2"><f>SUM(20,22)</f><v>42</v></c><c r="C2"><f>SUM(B2,8)</f><v/></c></row><row r="3"><c r="A3" t="inlineStr"><is><t>Berlin</t></is></c><c r="B3"><v>31</v></c></row></sheetData></worksheet>')
+        dimensions = f'<dimension ref="{dimension}"/>' if dimension else ""
+        archive.writestr("xl/worksheets/sheet1.xml", '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+                         + dimensions + '<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>City</t></is></c><c r="B1" t="inlineStr"><is><t>Total</t></is></c><c r="C1" t="inlineStr"><is><t>Formula</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>München</t></is></c><c r="B2"><f>SUM(20,22)</f><v>42</v></c><c r="C2"><f>SUM(B2,8)</f><v/></c></row><row r="3"><c r="A3" t="inlineStr"><is><t>Berlin</t></is></c><c r="B3"><v>31</v></c></row></sheetData></worksheet>')
         archive.writestr("xl/worksheets/sheet2.xml", '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1"/><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Private hidden data</t></is></c></row></sheetData></worksheet>')
     return result.getvalue()
 
@@ -90,14 +93,30 @@ def test_image_pdf_is_readable(client):
     assert len(PdfReader(io.BytesIO(download(client, job))).pages) == 1
 
 
-def test_xlsx_cached_formula_unicode_and_hidden_sheet(client):
-    job = wait(client, submit(client, "spreadsheet", [("sales.xlsx", workbook_bytes())])["id"])
+@pytest.mark.parametrize("dimension", ["A1:C3", "A1", None])
+def test_xlsx_cached_formula_unicode_and_hidden_sheet(client, dimension):
+    job = wait(client, submit(client, "spreadsheet", [("sales.xlsx", workbook_bytes(dimension))])["id"])
     content = "\n".join(page.extract_text() for page in PdfReader(io.BytesIO(download(client, job))).pages)
     assert "München" in content
+    assert "Berlin" in content
     assert "42" in content
     assert "=SUM(B2,8)" in content
     assert "Private hidden data" not in content
     assert any("no saved result" in warning for warning in job["warnings"])
+
+
+@pytest.mark.parametrize("rows, columns", [(10001, 1), (1, 81)])
+def test_xlsx_without_dimensions_enforces_export_limits(client, rows, columns):
+    workbook = Workbook(write_only=True)
+    sheet = workbook.create_sheet()
+    for _ in range(rows):
+        sheet.append(["data"] * columns)
+    result = io.BytesIO()
+    workbook.save(result)
+
+    job = wait(client, submit(client, "spreadsheet", [("wide.xlsx", result.getvalue())])["id"])
+    assert job["status"] == "failed"
+    assert "10,000 rows and 80 columns" in job["error"]
 
 
 def test_wide_csv_pagination_does_not_drop_rows_or_columns(client):

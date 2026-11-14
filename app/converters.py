@@ -10,6 +10,7 @@ import subprocess
 import time
 import warnings
 import zipfile
+from contextlib import closing
 from datetime import date, datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -279,23 +280,25 @@ def spreadsheet_pdf(job):
         with zipfile.ZipFile(source) as archive:
             if sum(entry.file_size for entry in archive.infolist()) > 200_000_000:
                 raise ConversionError("This workbook is too large when expanded.")
-        workbook = load_workbook(source, read_only=True, data_only=False, keep_links=False)
-        cached = load_workbook(source, read_only=True, data_only=True, keep_links=False)
-        try:
+        with (
+            closing(load_workbook(source, read_only=True, data_only=False, keep_links=False)) as workbook,
+            closing(load_workbook(source, read_only=True, data_only=True, keep_links=False)) as cached,
+        ):
             for sheet in workbook:
                 checkpoint(job)
                 if sheet.sheet_state != "visible":
                     continue
-                if sheet.max_row > 10000 or sheet.max_column > 80:
-                    raise ConversionError("Table export supports up to 10,000 rows and 80 columns per sheet. Remove unused formatted rows if needed.")
+                values_sheet = cached[sheet.title]
+                # Read-only worksheets use the recorded range, which can omit actual cells.
+                sheet.reset_dimensions()
+                values_sheet.reset_dimensions()
                 rows = []
-                for cells, values in zip(sheet.iter_rows(), cached[sheet.title].iter_rows()):
+                for cells, values in zip(sheet.iter_rows(), values_sheet.iter_rows()):
                     checkpoint(job)
+                    if len(rows) >= 10000 or len(cells) > 80:
+                        raise ConversionError("Table export supports up to 10,000 rows and 80 columns per sheet. Remove unused formatted rows if needed.")
                     rows.append([cell_text(cell, value, job) for cell, value in zip(cells, values)])
                 sheets.append((sheet.title, rows))
-        finally:
-            workbook.close()
-            cached.close()
     checkpoint(job)
     page_size = landscape(A4) if job.options["orientation"] == "landscape" else A4
     doc = SimpleDocTemplate(str(job.directory / f"{Path(job.filenames[0]).stem}.pdf"), pagesize=page_size,
