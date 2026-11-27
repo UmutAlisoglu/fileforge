@@ -1,6 +1,6 @@
 # FileForge
 
-Local file tools for Windows. **Version 0.3.0** brings the connected FileForge workspace into the desktop application, with its engines bundled for offline use. The existing native converters remain available for larger files.
+Local file tools for Windows. **Version 0.3.1** fixes native XLSX-to-PDF exports that could miss cells when a workbook reported incorrect worksheet dimensions. The desktop workspace includes its engines for offline use, and the native converters handle larger files.
 
 ## Install or update
 

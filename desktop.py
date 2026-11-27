@@ -12,7 +12,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 EXPECTED_TOOLS = 9
 
 

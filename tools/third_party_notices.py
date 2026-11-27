@@ -28,7 +28,7 @@ def is_notice(item):
 
 def main():
     blocks = [
-        "FileForge 0.3.0 - Third-party notices\n\n"
+        "FileForge 0.3.1 - Third-party notices\n\n"
         "Native FFmpeg and FFprobe are separately installed external tools and are not bundled.\n"
         "The connected workspace includes its own FFmpeg WebAssembly engine and other replaceable browser runtimes in workspace/.\n"
         "The following notices cover the Python runtime, conversion libraries and native components distributed in this release.\n"
