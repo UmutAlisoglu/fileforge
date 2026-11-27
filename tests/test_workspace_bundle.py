@@ -12,7 +12,7 @@ from tools.prepare_workspace import verify
 @pytest.mark.skipif(not workspace_manifest(), reason='Run tools/prepare_workspace.py to include the offline workspace checks.')
 def test_complete_workspace_is_pinned_and_does_not_contain_personal_site():
     manifest = verify()
-    assert manifest['version'] == '0.3.0'
+    assert manifest['version'] == '0.3.1'
     assert manifest['task_count'] == 22 and manifest['tool_pages'] == 21
     paths = [item['path'] for item in manifest['files']]
     for required in ['tools/workspace/index.html', 'tools/word-to-pdf/index.html', 'tools/powerpoint-to-pdf/index.html', 'tools/csv-json/index.html', 'vendor/ffmpeg/ffmpeg-core.wasm', 'vendor/heic/heic-to.js', 'vendor/tesseract/lang/eng.traineddata.gz', 'THIRD_PARTY_NOTICES.md', 'SOURCE.md']:
@@ -23,7 +23,7 @@ def test_complete_workspace_is_pinned_and_does_not_contain_personal_site():
     assert list((WORKSPACE / 'licenses').glob('*.txt'))
     assert list((WORKSPACE / 'assets/models').glob('*.onnx'))
     html = (WORKSPACE / 'tools/workspace/index.html').read_text(encoding='utf-8')
-    assert 'Native tools' in html and 'Desktop 0.3.0' in html
+    assert 'Native tools' in html and 'Desktop 0.3.1' in html
     assert 'data-open-offline' not in html and 'data-offline-panel' not in html
     assert 'Skate Scape' not in html and 'umut alisoglu' not in html
 
@@ -34,7 +34,7 @@ def test_native_routes_remain_local_and_health_distinguishes_modes():
     assert response.status_code == 200 and 'Native conversion tools' in response.text
     assert "frame-ancestors 'none'" in response.headers['content-security-policy']
     health = client.get('/api/health').json()
-    assert health['version'] == '0.3.0' and len(health['tools']) == 9
+    assert health['version'] == '0.3.1' and len(health['tools']) == 9
     assert client.post('/api/jobs', headers={'origin': 'https://external.invalid'}).status_code == 403
     assert client.get('/', headers={'host': 'external.invalid'}).status_code == 400
     help_page = client.get('/desktop-help/')

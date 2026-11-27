@@ -1,6 +1,6 @@
 # Working on FileForge Desktop
 
-FileForge 0.3.0 combines a connected workspace with the existing native conversion service. Both run on the user's computer. The desktop release includes its engines; the website is not opened remotely inside the app.
+FileForge 0.3.1 combines a connected workspace with the existing native conversion service. Both run on the user's computer. The desktop release includes its engines; the website is not opened remotely inside the app.
 
 ## Architecture
 

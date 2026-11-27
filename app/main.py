@@ -27,7 +27,7 @@ from .image_batch import convert_images
 from .workspace import WORKSPACE, workspace_manifest
 
 CONVERTERS = {**CORE_CONVERTERS, **ADVANCED_CONVERTERS, 'image': convert_images}
-VERSION = '0.3.0'
+VERSION = '0.3.1'
 
 STATIC = Path(__file__).parent / "static"
 DATA = Path(os.environ.get("FILEFORGE_DATA_DIR", Path(tempfile.gettempdir()) / "fileforge-jobs"))

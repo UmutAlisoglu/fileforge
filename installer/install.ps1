@@ -23,7 +23,7 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'uninstall.ps1') -Destination $i
 if (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'THIRD_PARTY_NOTICES.txt')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'THIRD_PARTY_NOTICES.txt') -Destination $installRoot -Force
 }
-@{ installPath = $installRoot; app = 'FileForge'; version = '0.3.0' } | ConvertTo-Json | Set-Content -LiteralPath $marker -Encoding UTF8
+@{ installPath = $installRoot; app = 'FileForge'; version = '0.3.1' } | ConvertTo-Json | Set-Content -LiteralPath $marker -Encoding UTF8
 if (-not $SkipShortcuts) {
     $shellObject = New-Object -ComObject WScript.Shell
     $startMenu = [Environment]::GetFolderPath('Programs')
@@ -37,7 +37,7 @@ if (-not $SkipRegistration) {
     $registryPath = 'HKCU:/Software/Microsoft/Windows/CurrentVersion/Uninstall/FileForge'
     New-Item -Path $registryPath -Force | Out-Null
     New-ItemProperty -Path $registryPath -Name DisplayName -Value 'FileForge' -PropertyType String -Force | Out-Null
-    New-ItemProperty -Path $registryPath -Name DisplayVersion -Value '0.3.0' -PropertyType String -Force | Out-Null
+    New-ItemProperty -Path $registryPath -Name DisplayVersion -Value '0.3.1' -PropertyType String -Force | Out-Null
     New-ItemProperty -Path $registryPath -Name InstallLocation -Value $installRoot -PropertyType String -Force | Out-Null
     New-ItemProperty -Path $registryPath -Name DisplayIcon -Value (Join-Path $installRoot 'FileForge.exe') -PropertyType String -Force | Out-Null
     $uninstallCommand = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $installRoot 'uninstall.ps1') + '"'
